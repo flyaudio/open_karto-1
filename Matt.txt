@@ -4,7 +4,7 @@ karto.h
   class KARTO_EXPORT Exception
   class KARTO_EXPORT NonCopyable
   class Singleton(NOT IN USE)
-  class KARTO_EXPORT Functor(仿函数)
+  class Functor(仿函数)
   class KARTO_EXPORT ParameterManager : public NonCopyable
   class Name
   class KARTO_EXPORT Object : public NonCopyable
@@ -20,23 +20,26 @@ karto.h
   class Matrix
   class BoundingBox2
   class Transform
-  class AbstractParameter
   class Parameter : public AbstractParameter
+	  class AbstractParameter
   class ParameterEnum : public Parameter<kt_int32s>
   class Parameters : public Object
-  class KARTO_EXPORT Sensor : public Object
-  class KARTO_EXPORT SensorManager
+	class Object : public NonCopyable
+  class SensorManager
   class Drive : public Sensor
-  class KARTO_EXPORT LaserRangeFinder : public Sensor
+  class LaserRangeFinder : public Sensor //增加了laser的参数
+	class Sensor : public Object         //sensor是相对位姿的功能
+		class Object : public NonCopyable//object是name的功能
   class CoordinateConverter
   class Grid
   class CustomData : public Object
-  class KARTO_EXPORT SensorData : public Object
-  class LaserRangeScan : public SensorData   //这里面存储了最原始的扫描深度数据，然后在LocalizedRangeScan中存储了扫描点在世界坐标系中的位置
-  class DrivePose : public SensorData
-  class LocalizedRangeScan : public LaserRangeScan
+  class DrivePose      : public SensorData
   class LocalizedRangeScanWithPoints : public LocalizedRangeScan
-  class KARTO_EXPORT CellUpdater : public Functor
+	  class LocalizedRangeScan : public LaserRangeScan
+		  class LaserRangeScan : public SensorData //这里面存储了最原始的扫描深度数据，然后在LocalizedRangeScan中存储了扫描点在世界坐标系中的位置
+			class SensorData : public Object
+				class Object : public NonCopyable
+  class CellUpdater : public Functor
   class OccupancyGrid : public Grid<kt_int8u>
   class DatasetInfo : public Object
   class Dataset
@@ -45,23 +48,27 @@ karto.h
 
 
 Mapper.h  
-  class MapperListener
-  class MapperDebugListener
-  class MapperLoopClosureListener : public MapperListener
-  class EdgeLabel
-  class LinkInfo : public EdgeLabel
-  class Vertex
-  class Edge
-  class Visitor
-  class GraphTraversal
-  class Graph
-  class KARTO_EXPORT MapperGraph : public Graph<LocalizedRangeScan>
-  class ScanSolver
-  class CorrelationGrid : public Grid<kt_int8u>
-  class KARTO_EXPORT ScanMatcher
-  class KARTO_EXPORT MapperSensorManager
-  class KARTO_EXPORT Mapper : public Module
-  
+	class MapperListener
+	class MapperDebugListener
+	class MapperLoopClosureListener : public MapperListener
+	class LinkInfo : public EdgeLabel
+		class EdgeLabel
+	class Vertex
+	class Edge
+	class NearScanVisitor : public Visitor<LocalizedRangeScan>  
+		class Visitor
+	class BreadthFirstTraversal : public GraphTraversal<T>
+		class GraphTraversal
+	class Graph
+	class MapperGraph : public Graph<LocalizedRangeScan>
+	class SpaSolver : public karto::ScanSolver
+		class ScanSolver
+	class CorrelationGrid : public Grid<kt_int8u>
+	class ScanManager
+	class MapperSensorManager
+	class ScanMatcher
+	class Mapper : public Module
+	class Parameter : public AbstractParameter  
 
 
 

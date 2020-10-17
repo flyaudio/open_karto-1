@@ -1008,7 +1008,7 @@ namespace karto
 
     /**
      * Returns the square of the length of the vector
-     * @return square of the length of the vector
+     * @return square of the length of the vector(x^2 + y^2)
      */
     inline kt_double SquaredLength() const
     {
@@ -3489,6 +3489,7 @@ namespace karto
   private:
     /**
      * Sensor offset pose
+     * robot_T_lidar
      */
     Parameter<Pose2>* m_pOffsetPose;
   };  // Sensor
@@ -4155,7 +4156,7 @@ namespace karto
     Parameter<kt_double>* m_pMinimumRange;
     Parameter<kt_double>* m_pMaximumRange;
 
-    Parameter<kt_double>* m_pRangeThreshold;
+    Parameter<kt_double>* m_pRangeThreshold;//用于栅格的大小 ??
 
     ParameterEnum* m_pType;
 
@@ -4201,8 +4202,8 @@ namespace karto
   public:
     /**
      * Scales the value
-     * @param value
-     * @return scaled value
+     * @param value(meter)
+     * @return scaled value(pixel)
      */
     inline kt_double Transform(kt_double value)
     {
@@ -4347,7 +4348,7 @@ namespace karto
 
   private:
     Size2<kt_int32s> m_Size;
-    kt_double m_Scale;    // 定义了1m范围内要有m_Scale个行，以及m_Scale列，m_Scale=100
+    kt_double m_Scale;//pixel per meter    // 定义了1m范围内要有m_Scale个行，以及m_Scale列，m_Scale=100
 
     Vector2<kt_double> m_Offset;
   };  // CoordinateConverter
@@ -4367,7 +4368,7 @@ namespace karto
      * Creates a grid of given size and resolution
      * @param width
      * @param height
-     * @param resolution
+     * @param resolution(meter per pixel)
      * @return grid pointer
      */
     static Grid* CreateGrid(kt_int32s width, kt_int32s height, kt_double resolution)
@@ -4741,7 +4742,7 @@ namespace karto
   private:
     kt_int32s m_Width;       // width of grid
     kt_int32s m_Height;      // height of grid
-    kt_int32s m_WidthStep;   // 8 bit aligned width of grid
+    kt_int32s m_WidthStep;   // 8 bit aligned width of grid//相当于opencv Mat里面的step
     T* m_pData;              // grid data
 
     // coordinate converter to convert between world coordinates and grid coordinates
@@ -5079,7 +5080,9 @@ namespace karto
     const LaserRangeScan& operator=(const LaserRangeScan&);
 
   private:
+  	// 从laser读取的原始数据
     kt_double* m_pRangeReadings;
+	// laser射线数量
     kt_int32u m_NumberOfRangeReadings;
   };  // LaserRangeScan
 
@@ -5271,6 +5274,7 @@ namespace karto
 
     /**
      * Computes the robot pose given the corrected scan pose
+     * 将karto算法得到的结果赋值的函数
      * @param rScanPose pose of the sensor
      */
     void SetSensorPose(const Pose2& rScanPose)
@@ -5432,22 +5436,26 @@ namespace karto
   private:
     /**
      * Odometric pose of robot
+     * 机器人的里程计结果，不是准确的结果，需要优化，注意不是laser位姿
      */
     Pose2 m_OdometricPose;
 
     /**
      * Corrected pose of robot calculated by mapper (or localizer)
+     * world_T_robot
      */
     Pose2 m_CorrectedPose;
 
   protected:
     /**
      * Average of all the point readings
+     * 将 m_PointReadings 的每一个点强行加起来算出的平均点位置
      */
     Pose2 m_BarycenterPose;
 
     /**
      * Vector of point readings
+     * 将laser的扫描数据转换为 在世界坐标系中的二维坐标结果，在Update()函数中实现
      */
     PointVectorDouble m_PointReadings;
 
@@ -5458,11 +5466,13 @@ namespace karto
 
     /**
      * Bounding box of localized range scan
+     * 将laser scan数据在world坐标系中的结果用boundingbox圈起来
      */
     BoundingBox2 m_BoundingBox;
 
     /**
      * Internal flag used to update point readings, barycenter and bounding box
+     * 如果当前帧的数据没有用于LocalizedRangeScan的信息更新，那么m_IsDirty就是true，就需要更新一下
      */
     kt_bool m_IsDirty;
   };  // LocalizedRangeScan
@@ -6416,6 +6426,7 @@ namespace karto
       assert(angleOffset != 0.0);
       assert(angleResolution != 0.0);
 
+      // 角度搜索范围：40度： 2 * 20
       kt_int32u nAngles = static_cast<kt_int32u>(math::Round(angleOffset * 2.0 / angleResolution) + 1);
       SetSize(nAngles);
 

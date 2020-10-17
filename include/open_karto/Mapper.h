@@ -595,6 +595,7 @@ namespace karto
 
     /**
      * Find "nearby" (no further than given distance away) scans through graph links
+     * 利用深度优先算法搜索相邻的帧
      * @param pScan
      * @param maxDistance
      */
@@ -704,6 +705,7 @@ namespace karto
 
     /**
      * Traversal algorithm to find near linked scans
+     * 利用深度优先算法(BFS)来搜索当前帧的邻近帧
      */
     GraphTraversal<LocalizedRangeScan>* m_pTraversal;
   };  // MapperGraph
@@ -860,6 +862,7 @@ namespace karto
     /**
      * Smear cell if the cell at the given point is marked as "occupied"
      * @param rGridPoint
+     大致上感觉是：通过一个 6 * 6 的核函数，将当前坐标点附近 6*6 的点 做卷积，如果附近点的占用值小于核函数中的占用值，则将 核函数中的占用值 赋值给 附近点的占用值
      */
     inline void SmearPoint(const Vector2<kt_int32s>& rGridPoint)
     {
@@ -1686,7 +1689,7 @@ namespace karto
 
     ScanMatcher* m_pSequentialScanMatcher;
 
-    MapperSensorManager* m_pMapperSensorManager;    //这个里面包含了历史的scans 以及runningscans
+    MapperSensorManager* m_pMapperSensorManager;    //这个里面包含了历史的scans 以及runningscans;(其中runningScans是用来做匹配的)
 
     MapperGraph* m_pGraph;
     ScanSolver* m_pScanOptimizer;
