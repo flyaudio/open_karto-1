@@ -1316,6 +1316,7 @@ namespace karto
 
     /**
      * Get scan manager for id
+     * 按name索引 m_ScanManagers
      * @param rSensorName
      * @return ScanManager
      */

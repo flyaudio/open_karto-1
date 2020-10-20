@@ -45,6 +45,7 @@ karto.h
   class Dataset
   class LookupArray
   class GridIndexLookup
+class SlamKarto
 
 
 Mapper.h  
@@ -70,11 +71,18 @@ Mapper.h
 	class Mapper : public Module
 	class Parameter : public AbstractParameter  
 
-
-
-
-
-
+Mapper类下有成员：
+	ScanMatcher 类 下有成员
+		Mapper
+		CorrelationGrid
+		Grid
+		GridIndexLookup
+	MapperSensorManager 类下有成员
+		ScanManager 类
+		LocalizedRangeScan 类
+	MapperGraph 类
+	ScanSolver 类
+	MapperListener 类
 
 
 

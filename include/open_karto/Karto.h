@@ -5080,7 +5080,7 @@ namespace karto
     const LaserRangeScan& operator=(const LaserRangeScan&);
 
   private:
-  	// 从laser读取的原始数据
+  	// 一帧scan的所有距离值，指向数组的指针
     kt_double* m_pRangeReadings;
 	// laser射线数量
     kt_int32u m_NumberOfRangeReadings;
@@ -5437,6 +5437,7 @@ namespace karto
     /**
      * Odometric pose of robot
      * 机器人的里程计结果，不是准确的结果，需要优化，注意不是laser位姿
+     * 怎么来的??encoder??
      */
     Pose2 m_OdometricPose;
 
@@ -6482,7 +6483,7 @@ namespace karto
 
       //第i个角度的所有扫描数据的指针，每一个扫描数据又是一个uint数组，这个uint数组的大小是LookupArray的m_Capacity， m_Capacity 的大小是rLocalPoints.size()
       kt_int32s* pAngleIndexPointer = m_ppLookupArray[angleIndex]->GetArrayPointer();
-
+	  // NOT IN USE
       kt_double maxRange = pScan->GetLaserRangeFinder()->GetMaximumRange();
 
       const_forEach(Pose2Vector, &rLocalPoints)
@@ -6508,9 +6509,11 @@ namespace karto
         // Vector2<kt_int32s> testgridpoint = m_pGrid->WorldToGrid(test);
 
         // have to compensate for the grid offset when getting the grid index
+        // rPosition 旋转后的坐标，加上 地图中心 与原点间的偏差？地图就是 pCorrelationGrid        
         Vector2<kt_int32s> gridPoint = m_pGrid->WorldToGrid(offset + rGridOffset);// 这个地方难道不该是相减吗？？？？gridPoint是负的有什么用呢？难道grid的第0个点指的是中心？上面是正的，下面是负的？
         //总之经过上面这么一折腾，gridPoint的结果和offset其实是差不多的，过程相当于将offset*100，然后round结果
         // use base GridIndex to ignore ROI
+        // lookupIndex 就是 雷达点经过旋转之后在地图中的索引值        
         kt_int32s lookupIndex = m_pGrid->Grid<T>::GridIndex(gridPoint, false);
 
         pAngleIndexPointer[readingIndex] = lookupIndex;
@@ -6567,7 +6570,7 @@ namespace karto
 
     kt_int32u m_Capacity;
     kt_int32u m_Size;
-
+	// 是个2维指针，存储不同角度下的雷达数据
     LookupArray **m_ppLookupArray;
 
     // for sanity check

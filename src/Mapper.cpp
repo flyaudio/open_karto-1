@@ -158,8 +158,10 @@ namespace karto
     }
 
   private:
-    LocalizedRangeScanVector m_Scans;
-    LocalizedRangeScanVector m_RunningScans;   //这里用队列结构似乎更好，因为要进行删除头的操作
+    LocalizedRangeScanVector m_Scans;//all scans
+	//这里用队列结构似乎更好，因为要进行删除头的操作
+	//实时维护的局部激光数据链，首末两帧距离在一定距离范围内，且满足一定数据规模，否则需要删除末端数据帧
+    LocalizedRangeScanVector m_RunningScans;   
     LocalizedRangeScan* m_pLastScan;
 
     kt_int32u m_RunningBufferMaximumSize;
@@ -172,6 +174,7 @@ namespace karto
 
   void MapperSensorManager::RegisterSensor(const Name& rSensorName)
   {
+    //if new laser device
     if (GetScanManager(rSensorName) == NULL)
     {
       m_ScanManagers[rSensorName] = new ScanManager(m_RunningBufferMaximumSize, m_RunningBufferMaximumDistance);
@@ -224,8 +227,8 @@ namespace karto
    */
   void MapperSensorManager::AddScan(LocalizedRangeScan* pScan)
   {
-    GetScanManager(pScan)->AddScan(pScan, m_NextScanId);   //这个是在ScanManager 类中加入了 pScan
-    m_Scans.push_back(pScan);                              //这个是在当前的MapperSensorManager 中加入了 pScan，两者有关系
+    GetScanManager(pScan)->AddScan(pScan, m_NextScanId);   //m_ScanManagers 中加入了 pScan
+    m_Scans.push_back(pScan);                              //m_Scans 中加入了 pScan，两者有关系??
     m_NextScanId++;                                        //MapperSensorManager has a "typedef std::map<Name, ScanManager*> ScanManagerMap"
   }
 
@@ -235,7 +238,7 @@ namespace karto
    */
   inline void MapperSensorManager::AddRunningScan(LocalizedRangeScan* pScan)
   {
-    GetScanManager(pScan)->AddRunningScan(pScan);
+    GetScanManager(pScan)->AddRunningScan(pScan); //m_ScanManagers
   }
 
   /**
@@ -354,12 +357,12 @@ namespace karto
 
   /**
    * Match given scan against set of scans
-   * @param pScan scan being scan-matched
-   * @param rBaseScans set of scans whose points will mark cells in grid as being occupied
-   * @param rMean output parameter of mean (best pose) of match
-   * @param rCovariance output parameter of covariance of match
-   * @param doPenalize whether to penalize matches further from the search center
-   * @param doRefineMatch whether to do finer-grained matching if coarse match is good (default is true)
+   * @param in: pScan scan being scan-matched
+   * @param in: rBaseScans set of scans whose points will mark cells in grid as being occupied
+   * @param out:rMean output parameter of mean (best pose) of match
+   * @param out:rCovariance output parameter of covariance of match
+   * @param in: doPenalize whether to penalize matches further from the search center
+   * @param in: doRefineMatch whether to do finer-grained matching if coarse match is good (default is true)
    * @return strength of response
    * 将当前帧和前面的帧（多个）进行比较，根据odometry给出的初始位姿，在初始位姿附近找到更合适的位姿作为机器人移动位姿，同时返回该位姿下的response（衡量标准）以及covariance（可信度）
    */
@@ -1054,6 +1057,8 @@ namespace karto
       //如果以前被占据了，就是100，如果不是，就应该是0. 
       //如果还有疑惑，就应该是pByte所代表的数据是如何赋值的(其实就是 AddScans(rBaseScans, pScan), 在MatchScan一开始的时候就执行了)。只需要找到这部分代码就可以了。
       // uses index offsets to efficiently find location of point in the grid
+      // pAngleIndexPointer[i] 是这帧scan的第i个点经过旋转后对应着的栅格地图的索引
+      // pByte[pAngleIndexPointer[i]] 就是这个索引对应着的占用值：    
       response += pByte[pAngleIndexPointer[i]];
     }
 
@@ -2274,7 +2279,11 @@ namespace karto
   }
 
 
-// 初始化Lidar的相关参数
+/* 初始化Mapper的参数
+1.m_pSequentialScanMatcher
+2.m_pMapperSensorManager
+3.m_pGraph
+*/
   void Mapper::Initialize(kt_double rangeThreshold)
   {
     if (m_Initialized == false)
@@ -2320,6 +2329,9 @@ namespace karto
   {
     if (pScan != NULL)
     {
+      //
+      //1 通过上一帧雷达数据的坐标，加上上一帧雷达到当前帧雷达的odom变化，得到当前帧的初始位姿
+      
       //通过 单例模式 实现了 pLaserRangeFinder的找回
       karto::LaserRangeFinder* pLaserRangeFinder = pScan->GetLaserRangeFinder();
 
@@ -2349,7 +2361,9 @@ namespace karto
         Matrix3 m_Rotation;
         Matrix3 m_InverseRotation;
         */
+        // 2_T_1
         Transform lastTransform(pLastScan->GetOdometricPose(), pLastScan->GetCorrectedPose());
+		// 用pLastScan修正的pose来更新pScan
         pScan->SetCorrectedPose(lastTransform.TransformPose(pScan->GetOdometricPose()));
       }
 
@@ -2360,6 +2374,7 @@ namespace karto
       //   2.当前帧和上一帧相比在时间上或者距离上相距较远
       if (!HasMovedEnough(pScan, pLastScan))
       {
+      	//这时是直接用encoder来更新pose??
         return false;
       }
 
@@ -2370,11 +2385,11 @@ namespace karto
       if (m_pUseScanMatching->GetValue() && pLastScan != NULL)
       {
         Pose2 bestPose;
-		//核心一：进行匹配
+		//核心一:pScan和runningScans匹配
         m_pSequentialScanMatcher->MatchScan(pScan,
                                             m_pMapperSensorManager->GetRunningScans(pScan->GetSensorName()),
                                                                                     bestPose,
-                                                                                    covariance);
+                                                                                    covariance);//doPenalize=0,doRefineMatch=0
         pScan->SetSensorPose(bestPose);   //出来了最好的位置
       }
 
@@ -2433,6 +2448,7 @@ namespace karto
       return true;
     }
 
+	//robot_T_laser是固定的,没必要转换吧??
     Pose2 lastScannerPose = pLastScan->GetSensorAt(pLastScan->GetOdometricPose());
     Pose2 scannerPose = pScan->GetSensorAt(pScan->GetOdometricPose());
 
