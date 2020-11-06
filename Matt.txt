@@ -1,14 +1,13 @@
 
-
+应该用图来表示继承关系
 karto.h
-  class KARTO_EXPORT Exception
-  class KARTO_EXPORT NonCopyable
+  class Exception
+  class NonCopyable
   class Singleton(NOT IN USE)
   class Functor(仿函数)
-  class KARTO_EXPORT ParameterManager : public NonCopyable
+  class ParameterManager : public NonCopyable
   class Name
-  class KARTO_EXPORT Object : public NonCopyable
-  class KARTO_EXPORT Module : public Object
+  class Module : public Object
   class Size2
   class Vector2
   class Vector3
@@ -31,7 +30,6 @@ karto.h
 	class Sensor : public Object         //sensor是相对位姿的功能
 		class Object : public NonCopyable//object是name的功能
   class CoordinateConverter
-  class Grid
   class CustomData : public Object
   class DrivePose      : public SensorData
   class LocalizedRangeScanWithPoints : public LocalizedRangeScan
@@ -41,11 +39,12 @@ karto.h
 				class Object : public NonCopyable
   class CellUpdater : public Functor
   class OccupancyGrid : public Grid<kt_int8u>
+	  class Grid
   class DatasetInfo : public Object
   class Dataset
   class LookupArray
   class GridIndexLookup
-class SlamKarto
+  class SlamKarto
 
 
 Mapper.h  
@@ -71,21 +70,57 @@ Mapper.h
 	class Mapper : public Module
 	class Parameter : public AbstractParameter  
 
+////////////////////////////////////////////////////////
 Mapper类下有成员：
+    ScanMatcher* m_pSequentialScanMatcher;
+    MapperSensorManager* m_pMapperSensorManager;    //这个里面包含了历史的scans 以及runningscans;(其中runningScans是用来做匹配的)
+    MapperGraph* m_pGraph;
+    ScanSolver* m_pScanOptimizer;
+    std::vector<MapperListener*> m_Listeners;
+	
+	////////////////////////////////////////////////////////
+	-----------------------------
 	ScanMatcher 类 下有成员
-		Mapper
-		CorrelationGrid
-		Grid
-		GridIndexLookup
+		Mapper* m_pMapper;                         (Mapper 类)
+		CorrelationGrid* m_pCorrelationGrid;       (CorrelationGrid 类)
+		Grid<kt_double>* m_pSearchSpaceProbs;      (Grid 类)
+		GridIndexLookup<kt_int8u>* m_pGridLookup;  (GridIndexLookup 类)
+		
+	-----------------------------
 	MapperSensorManager 类下有成员
-		ScanManager 类
-		LocalizedRangeScan 类
+		ScanManagerMap m_ScanManagers;				(ScanManager 类)
+		kt_int32u m_RunningBufferMaximumSize;
+		kt_double m_RunningBufferMaximumDistance;
+		kt_int32s m_NextScanId;
+		std::vector<LocalizedRangeScan*> m_Scans;	(LocalizedRangeScan 类)
+		
+		
+	-----------------------------
 	MapperGraph 类
+	-----------------------------
 	ScanSolver 类
+	-----------------------------
 	MapperListener 类
+	
+		////////////////////////////////////////////////////////
+		-----------------------------
+		ScanManager 类下有成员
+			LocalizedRangeScanVector m_Scans;//all scans    (LocalizedRangeScan 类)
+			LocalizedRangeScanVector m_RunningScans;        (LocalizedRangeScan 类)
+			LocalizedRangeScan* m_pLastScan;                (LocalizedRangeScan 类)
+			kt_int32u m_RunningBufferMaximumSize;
+			kt_double m_RunningBufferMaximumDistance;
 
-
-
+            ////////////////////////////////////////////////////////
+			-----------------------------
+			LocalizedRangeScan 类下有成员
+				Pose2 m_OdometricPose;
+				Pose2 m_CorrectedPose;
+				Pose2 m_BarycenterPose;
+				PointVectorDouble m_PointReadings;
+				PointVectorDouble m_UnfilteredPointReadings;
+				BoundingBox2 m_BoundingBox;
+				kt_bool m_IsDirty;
 
 
 

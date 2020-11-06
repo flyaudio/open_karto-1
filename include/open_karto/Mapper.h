@@ -146,7 +146,8 @@ namespace karto
       // transform covariance into reference of first pose
       Matrix3 rotationMatrix;
       rotationMatrix.FromAxisAngle(0, 0, 1, -rPose1.GetHeading());
-
+      //?? rCovariance是基于哪个坐标系的呢??
+      // https://robotics.stackexchange.com/questions/2556/how-to-rotate-covariance
       m_Covariance = rotationMatrix * rCovariance * rotationMatrix.Transpose();
     }
 
@@ -862,7 +863,8 @@ namespace karto
     /**
      * Smear cell if the cell at the given point is marked as "occupied"
      * @param rGridPoint
-     大致上感觉是：通过一个 6 * 6 的核函数，将当前坐标点附近 6*6 的点 做卷积，如果附近点的占用值小于核函数中的占用值，则将 核函数中的占用值 赋值给 附近点的占用值
+     大致上感觉是：通过一个 6 * 6 的核函数，将当前坐标点附近 6*6 的点 做卷积，
+     如果附近点的占用值小于核函数中的占用值，则将 核函数中的占用值 赋值给 附近点的占用值
      */
     inline void SmearPoint(const Vector2<kt_int32s>& rGridPoint)
     {
@@ -877,7 +879,7 @@ namespace karto
       kt_int32s halfKernel = m_KernelSize / 2;
 
       // apply kernel
-      for (kt_int32s j = -halfKernel; j <= halfKernel; j++)
+      for (kt_int32s j = -halfKernel; j <= halfKernel; j++)//y
       {
         kt_int8u* pGridAdr = GetDataPointer(Vector2<kt_int32s>(rGridPoint.GetX(), rGridPoint.GetY() + j));
 
@@ -886,7 +888,7 @@ namespace karto
         // if a point is on the edge of the grid, there is no problem
         // with running over the edge of allowable memory, because
         // the grid has margins to compensate for the kernel size
-        for (kt_int32s i = -halfKernel; i <= halfKernel; i++)
+        for (kt_int32s i = -halfKernel; i <= halfKernel; i++)//x
         {
           kt_int32s kernelArrayIndex = i + kernelConstant;
 
@@ -918,6 +920,7 @@ namespace karto
       GetCoordinateConverter()->SetScale(1.0 / resolution);
 
       // setup region of interest
+      //                           bottom left coordinate
       m_Roi = Rectangle2<kt_int32s>(borderSize, borderSize, width, height);
 
       // calculate kernel
@@ -955,7 +958,7 @@ namespace karto
       // +1 for center
       m_KernelSize = 2 * GetHalfKernelSize(m_SmearDeviation, resolution) + 1;
 
-      // allocate kernel
+      // allocate kernel数组
       m_pKernel = new kt_int8u[m_KernelSize * m_KernelSize];
       if (m_pKernel == NULL)
       {
@@ -1173,8 +1176,8 @@ namespace karto
   private:
     Mapper* m_pMapper;
 
-    CorrelationGrid* m_pCorrelationGrid;   //更多用来存储栅格，同时提供world2grid这个功能，在其内部有 GridIndex 方法似乎和 Grid<T>::GridIndex 一样
-    Grid<kt_double>* m_pSearchSpaceProbs;
+    CorrelationGrid* m_pCorrelationGrid; //更多用来存储栅格，同时提供world2grid这个功能，在其内部有 GridIndex 方法似乎和 Grid<T>::GridIndex 一样
+    Grid<kt_double>* m_pSearchSpaceProbs;//probability
 
     GridIndexLookup<kt_int8u>* m_pGridLookup; //用来存储经过不同旋转之后的nPoints个扫描点应该落在的位置上面
   };  // ScanMatcher
@@ -1223,7 +1226,7 @@ namespace karto
      * Gets scan from given sensor with given ID
      * @param rSensorName
      * @param scanIndex
-     * @return localized range scan
+     * @return localized range scan(m_ScanManagers)
      */
     LocalizedRangeScan* GetScan(const Name& rSensorName, kt_int32s scanIndex);
 
@@ -1258,7 +1261,7 @@ namespace karto
     /**
      * Gets the scan with the given unique id
      * @param id
-     * @return scan
+     * @return scan(m_Scans)
      */
     inline LocalizedRangeScan* GetScan(kt_int32s id)
     {
@@ -1282,7 +1285,7 @@ namespace karto
     /**
      * Gets scans of device
      * @param rSensorName
-     * @return scans of device
+     * @return scans of device(m_ScanManagers)
      */
     LocalizedRangeScanVector& GetScans(const Name& rSensorName);
 
@@ -1295,7 +1298,7 @@ namespace karto
 
     /**
      * Gets all scans of all devices
-     * @return all scans of all devices
+     * @return all scans of all devices(m_ScanManagers)
      */
     LocalizedRangeScanVector GetAllScans();
 
@@ -1865,6 +1868,8 @@ namespace karto
     // Variance of penalty for deviating from odometry when scan-matching.
     // The penalty is a multiplier (less than 1.0) is a function of the
     // delta of the scan position being tested and the odometric pose
+    //扫描匹配时偏离odometry的惩罚方差
+	//惩罚是乘数(小于1.0),是delta(被测扫描位置-里程计姿态)的函数
     Parameter<kt_double>* m_pDistanceVariancePenalty;
     Parameter<kt_double>* m_pAngleVariancePenalty;
 

@@ -223,6 +223,7 @@ namespace karto
 
   /**
    * Adds scan to scan vector of device that recorded scan
+   * 同时加入 m_Scans 和 m_ScanManagers,what's the diff??
    * @param pScan
    */
   void MapperSensorManager::AddScan(LocalizedRangeScan* pScan)
@@ -281,6 +282,8 @@ namespace karto
 
   /**
    * Deletes all scan managers of all devices
+   * clear m_ScanManagers
+   * m_Scans 不清??
    */
   void MapperSensorManager::Clear()
   {
@@ -304,7 +307,13 @@ namespace karto
     delete m_pSearchSpaceProbs;
     delete m_pGridLookup;
   }
-
+  /**
+   * 
+   * @param in:       
+   * @param in: searchSize    meter
+   * @param in: resolution    meter per pixel
+   * @return 
+   */
   ScanMatcher* ScanMatcher::Create(Mapper* pMapper, kt_double searchSize, kt_double resolution,
                                    kt_double smearDeviation, kt_double rangeThreshold)
   {
@@ -357,11 +366,11 @@ namespace karto
 
   /**
    * Match given scan against set of scans
-   * @param in: pScan scan being scan-matched
-   * @param in: rBaseScans set of scans whose points will mark cells in grid as being occupied
-   * @param out:rMean output parameter of mean (best pose) of match
-   * @param out:rCovariance output parameter of covariance of match
-   * @param in: doPenalize whether to penalize matches further from the search center
+   * @param in: pScan         scan being scan-matched
+   * @param in: rBaseScans    set of scans whose points will mark cells in grid as being occupied
+   * @param out:rMean         output parameter of mean (best pose) of match
+   * @param out:rCovariance   output parameter of covariance of match
+   * @param in: doPenalize    whether to penalize matches further from the search center
    * @param in: doRefineMatch whether to do finer-grained matching if coarse match is good (default is true)
    * @return strength of response
    * 将当前帧和前面的帧（多个）进行比较，根据odometry给出的初始位姿，在初始位姿附近找到更合适的位姿作为机器人移动位姿，同时返回该位姿下的response（衡量标准）以及covariance（可信度）
@@ -396,7 +405,8 @@ namespace karto
     // 3. compute offset (in meters - lower left corner)
     Vector2<kt_double> offset;  //offset是栅格左下角在世界坐标系中的位置
 
-    // m_pCorrelationGrid->GetResolution()  栅格地图一个格子在实际中的长度，单位：默认是 m
+    // m_pCorrelationGrid->GetResolution()  栅格地图一个格子在实际中的长度,meter
+    // 在当前位姿周围的roi,不考虑角度
     offset.SetX(scanPose.GetX() - (0.5 * (roi.GetWidth() - 1) * m_pCorrelationGrid->GetResolution()));
     offset.SetY(scanPose.GetY() - (0.5 * (roi.GetHeight() - 1) * m_pCorrelationGrid->GetResolution()));
 
@@ -408,12 +418,13 @@ namespace karto
     // set up correlation grid
     // 这里的scanPose.GetPosition()是 Lidar的位置，不是Lidar point的位置
 
-    //将rBaseScans的点所对应的栅格置为“occupied”，这就相当于存储好了原始的数据，之后只要拿现在的和原始的栅格相比较就行了
+    //将rBaseScans的点所对应的栅格置为“occupied”，这就相当于submap，之后是scan to submap
     AddScans(rBaseScans, scanPose.GetPosition());  //获得了Roi里栅格状态  //这个会对扫描点进行处理
 
     // compute how far to search in each direction// m_pSearchSpaceProbs 是一个 31 * 31 大小的栅格地图   
-    // coarseSearchOffset 是一个坐标, 31 * 31 网格的中心 距离左下角的距离，单位m
+    // pixel
     Vector2<kt_double> searchDimensions(m_pSearchSpaceProbs->GetWidth(), m_pSearchSpaceProbs->GetHeight());
+    // coarseSearchOffset 是一个坐标, 边长的一半, 31*31 网格的中心 距离左下角的距离，单位m
     Vector2<kt_double> coarseSearchOffset(0.5 * (searchDimensions.GetX() - 1) * m_pCorrelationGrid->GetResolution(),
                                           0.5 * (searchDimensions.GetY() - 1) * m_pCorrelationGrid->GetResolution());
 
@@ -430,7 +441,7 @@ namespace karto
                                            m_pMapper->m_pCoarseSearchAngleOffset->GetValue(),
                                            m_pMapper->m_pCoarseAngleResolution->GetValue(),
                                            doPenalize, rMean, rCovariance, false);
-
+	//在没有发现好的匹配的情况下，是否增加搜索范围
     if (m_pMapper->m_pUseResponseExpansion->GetValue() == true)
     {
       if (math::DoubleEqual(bestResponse, 0.0))
@@ -475,7 +486,7 @@ namespace karto
       bestResponse = CorrelateScan(pScan, rMean, fineSearchOffset, fineSearchResolution,
                                    0.5 * m_pMapper->m_pCoarseAngleResolution->GetValue(),
                                    m_pMapper->m_pFineSearchAngleOffset->GetValue(),
-                                   doPenalize, rMean, rCovariance, true);  //这里的true会让程序计算角度方差
+                                   doPenalize, rMean, rCovariance, true);  //doingFineMatch=true,计算角度方差
     }
 
 #ifdef KARTO_DEBUG
@@ -491,17 +502,21 @@ namespace karto
    * Finds the best pose for the scan centering the search in the correlation grid
    * at the given pose and search in the space by the vector and angular offsets
    * in increments of the given resolutions
-   * @param rScan scan to match against correlation grid
-   * @param rSearchCenter the center of the search space
-   * @param rSearchSpaceOffset searches poses in the area offset by this vector around search center
+   * @param rScan                  scan to match against correlation grid(当前帧)
+   * @param rSearchCenter          the center of the search space
+                                   矩形匹配范围的center=当前帧的(x,y)坐标,meter,
+   * @param rSearchSpaceOffset     searches poses in the area offset by this vector around search center
+   								   矩形匹配范围的一半:(width/2,height/2),pixel
    * @param rSearchSpaceResolution how fine a granularity to search in the search space
-   * @param searchAngleOffset searches poses in the angles offset by this angle around search center
-   * @param searchAngleResolution how fine a granularity to search in the angular search space
-   * @param doPenalize whether to penalize matches further from the search center
-   * @param rMean output parameter of mean (best pose) of match
-   * @param rCovariance output parameter of covariance of match
-   * @param doingFineMatch whether to do a finer search after coarse search
+                                   搜索间隔
+   * @param searchAngleOffset      searches poses in the angles offset by this angle around search center
+   * @param searchAngleResolution  how fine a granularity to search in the angular search space
+   * @param doPenalize             whether to penalize matches further from the search center
+   * @param rMean                  output parameter of mean (best pose) of match
+   * @param rCovariance            output parameter of covariance of match
+   * @param doingFineMatch         whether to do a finer search after coarse search
    * @return strength of response
+   ?? 这里耗时多少
    */
   kt_double ScanMatcher::CorrelateScan(LocalizedRangeScan* pScan, const Pose2& rSearchCenter,
                                        const Vector2<kt_double>& rSearchSpaceOffset,
@@ -552,6 +567,7 @@ namespace karto
     assert(math::DoubleEqual(yPoses.back(), -startY));
 
     // calculate pose response array size
+    //? why*2.0
     kt_int32u nAngles = static_cast<kt_int32u>(math::Round(searchAngleOffset * 2.0 / searchAngleResolution) + 1);
 
     kt_int32u poseResponseSize = static_cast<kt_int32u>(xPoses.size() * yPoses.size() * nAngles);  // 位置、角度的变化
@@ -559,7 +575,7 @@ namespace karto
     // allocate array   //Pose2包含了 x,y,theta. 滑窗的结果存储在pPoseResponse中
     std::pair<kt_double, Pose2>* pPoseResponse = new std::pair<kt_double, Pose2>[poseResponseSize];
     //这边有涉及到grid栅格的index和我想的不一样的问题，并非相对左下角的坐标转换为 index，似乎是中心是0,0
-    // rSearchCenter 是搜索空间的中心
+    // rSearchCenter 是搜索空间的中心.not in use
     Vector2<kt_int32s> startGridPoint = m_pCorrelationGrid->WorldToGrid(Vector2<kt_double>(rSearchCenter.GetX()
                                                                         + startX, rSearchCenter.GetY() + startY));
     
@@ -633,6 +649,8 @@ namespace karto
       bestResponse = math::Maximum(bestResponse, pPoseResponse[i].first);
 
       // will compute positional covariance, save best relative probability for each cell
+      //??何用
+      //if(粗匹配)
       if (!doingFineMatch)
       {
         const Pose2& rPose = pPoseResponse[i].second;
@@ -664,7 +682,7 @@ namespace karto
         averagePosition += pPoseResponse[i].second.GetPosition();
 
         kt_double heading = pPoseResponse[i].second.GetHeading();
-        thetaX += cos(heading);
+        thetaX += cos(heading);//?? why not直接对theta求平均
         thetaY += sin(heading);
 
         averagePoseCount++;                        //对 x,y进行平均
@@ -687,6 +705,7 @@ namespace karto
     }
 
     // delete pose response array
+    //原始指针要自己释放,可以用智能指针代替
     delete [] pPoseResponse;
 
 #ifdef KARTO_DEBUG
@@ -909,7 +928,8 @@ namespace karto
     // add all scans to grid
     const_forEach(LocalizedRangeScanVector, &rScans)   // rScans 可能是 running scans 或者 相邻的scans或者 闭环产生的scans
     {
-      AddScan(*iter, viewPoint);    //viewPoint 是当前帧的 在世界坐标系中的位置，但是不包含laser朝向信息，而 *iter都是存储的之前的帧的扫描点在世界坐标系中的位置
+      // doSmear=0
+      AddScan(*iter, viewPoint);//viewPoint 是当前帧的 在world中的位置，但是不包含laser朝向信息，而 *iter都是存储的之前的帧的扫描点在world中的位置
     }
   }
 
@@ -1042,13 +1062,16 @@ namespace karto
       return response;
     }
 
+    //
     // calculate response
+    
     kt_int32s* pAngleIndexPointer = pOffsets->GetArrayPointer();
     for (kt_int32u i = 0; i < nPoints; i++)
     {
       //将当前帧的扫描点(nPoints个)经过旋选之后的结果存储起来了，存在哪里了呢？存在了m_pGridLookup里面。存储的表示是pAngleIndexPointer[i]的id，表示存在了格子的第几个上面
       // ignore points that fall off the grid
       kt_int32s pointGridIndex = gridPositionIndex + pAngleIndexPointer[i];
+	  //不超过m_pCorrelationGrid的范围
       if (!math::IsUpTo(pointGridIndex, m_pCorrelationGrid->GetDataSize()) || pAngleIndexPointer[i] == INVALID_SCAN)
       {
         continue;
@@ -1063,6 +1086,7 @@ namespace karto
     }
 
     // normalize response
+    // 最大值=nPoints * GridStates_Occupied,所以结果总是<=1
     response /= (nPoints * GridStates_Occupied);
     assert(fabs(response) <= 1.0);
 
@@ -1288,7 +1312,7 @@ namespace karto
     }
   }
 /*
-闭环检测使用 MatchScan来进行，会去除掉相邻帧，这是因为这些已经优化过了.
+闭环检测使用 MatchScan来进行，会去掉相邻帧(因为这些已经优化过了)
 利用其他的非相邻的并且 barycenter距离小于4m的帧进行试探性的闭环，
 其做法是首先寻找 这样的帧，然后寻找该帧前后的帧是否同样满足 小于4m的条件，如果超过了一定数量，就保留这个链，
 可能有多个链被保留。 使用这个链代替 runningScan去做MatchScan， 判断response，如果response足够大，就进行闭环优化
@@ -1369,6 +1393,7 @@ namespace karto
     return loopClosed;
   }
 
+  //找到相邻帧链距离自己最近的
   LocalizedRangeScan* MapperGraph::GetClosestScanToPose(const LocalizedRangeScanVector& rScans,
                                                         const Pose2& rPose) const
   {
@@ -1445,7 +1470,7 @@ namespace karto
   {
     //先使用广度优先搜索的方法访问，后面还有一些判断条件，保证搜索到的相邻帧组成的链和自己之间（按时间顺序访问）存在着不相邻的帧
     const std::vector<LocalizedRangeScanVector> nearChains = FindNearChains(pScan);
-    const_forEach(std::vector<LocalizedRangeScanVector>, &nearChains)   //这是一个vector<vector<LocalizedRangeScan>>
+    const_forEach(std::vector<LocalizedRangeScanVector>, &nearChains)
     {
       //这里的m_pLoopMatchMinimumChainSize 是闭环检测的参数
       // 因为后面的闭环检测代码有说不让linkedscan参与闭环，那是因为 这些linkedscan已经在这里面加入过优化的约束了
@@ -1715,6 +1740,8 @@ namespace karto
 
       const_forEach(ScanSolver::IdPoseVector, &pSolver->GetCorrections())
       {
+        //why修正 m_Scans ?? why not the m_ScanManagers ??
+        //指针一样,so,修正哪个都一样的
         m_pMapper->m_pMapperSensorManager->GetScan(iter->first)->SetSensorPose(iter->second);
       }
 
@@ -2362,16 +2389,17 @@ namespace karto
         Matrix3 m_InverseRotation;
         */
         // 2_T_1
+        // 如果一样,就单位矩阵
         Transform lastTransform(pLastScan->GetOdometricPose(), pLastScan->GetCorrectedPose());
 		// 用pLastScan修正的pose来更新pScan
         pScan->SetCorrectedPose(lastTransform.TransformPose(pScan->GetOdometricPose()));
       }
 
       // test if scan is outside minimum boundary or if heading is larger then minimum heading
-      // 通过和上一帧数据比较判断当前帧是否能作为关键帧
-      // 能作为关键帧的情况:
+      // 通过和上一帧数据比较判断当前帧是否能作为kf
+      // 能作为kf的情况:
       //   1.当前帧是第一帧 
-      //   2.当前帧和上一帧相比在时间上或者距离上相距较远
+      //   2.pScan和pLastScan相比在时间上或者距离上相距较远
       if (!HasMovedEnough(pScan, pLastScan))
       {
       	//这时是直接用encoder来更新pose??
@@ -2388,8 +2416,8 @@ namespace karto
 		//核心一:pScan和runningScans匹配
         m_pSequentialScanMatcher->MatchScan(pScan,
                                             m_pMapperSensorManager->GetRunningScans(pScan->GetSensorName()),
-                                                                                    bestPose,
-                                                                                    covariance);//doPenalize=0,doRefineMatch=0
+                                            bestPose,
+                                            covariance);//doPenalize=0,doRefineMatch=0
         pScan->SetSensorPose(bestPose);   //出来了最好的位置
       }
 

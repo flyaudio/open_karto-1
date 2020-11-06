@@ -4174,9 +4174,9 @@ namespace karto
    */
   typedef enum
   {
-    GridStates_Unknown = 0,
-    GridStates_Occupied = 100,
-    GridStates_Free = 255
+    GridStates_Unknown = 0,//black
+    GridStates_Occupied = 100,//gray
+    GridStates_Free = 255//white
   } GridStates;
 
   ////////////////////////////////////////////////////////////////////////////////////////
@@ -4211,7 +4211,7 @@ namespace karto
     }
 
     /**
-     * Converts the point from world coordinates to grid coordinates
+     * Converts the point from world coordinates(meter) to grid coordinates(pixel)
      * @param rWorld world coordinate
      * @param flipY
      * @return grid coordinate
@@ -4234,7 +4234,7 @@ namespace karto
     }
 
     /**
-     * Converts the point from grid coordinates to world coordinates
+     * Converts the point from grid coordinates(pixel) to world coordinates(meter)
      * @param rGrid world coordinate
      * @param flipY
      * @return world coordinate
@@ -4321,7 +4321,7 @@ namespace karto
 
     /**
      * Sets the resolution
-     * @param resolution
+     * @param resolution(meter per pixel)
      */
     inline void SetResolution(kt_double resolution)
     {
@@ -4347,10 +4347,10 @@ namespace karto
     }
 
   private:
-    Size2<kt_int32s> m_Size;
+    Size2<kt_int32s> m_Size;//pixel
     kt_double m_Scale;//pixel per meter    // 定义了1m范围内要有m_Scale个行，以及m_Scale列，m_Scale=100
 
-    Vector2<kt_double> m_Offset;
+    Vector2<kt_double> m_Offset;//meter
   };  // CoordinateConverter
 
   ////////////////////////////////////////////////////////////////////////////////////////
@@ -4454,7 +4454,7 @@ namespace karto
 
     /**
      * Checks whether the given coordinates are valid grid indices
-     * @param rGrid
+     * @param rGrid:(x,y)index in pixel
      */
     inline kt_bool IsValidGridIndex(const Vector2<kt_int32s>& rGrid) const
     {
@@ -4463,9 +4463,9 @@ namespace karto
 
     /**
      * Gets the index into the data pointer of the given grid coordinate
-     * @param rGrid
-     * @param boundaryCheck default value is true
-     * @return grid index
+     * @param rGrid        :(x,y) index in pixel
+     * @param boundaryCheck: default value is true
+     * @return grid index  :一维数组(grid图片)的指针
      */
     virtual kt_int32s GridIndex(const Vector2<kt_int32s>& rGrid, kt_bool boundaryCheck = true) const
     {
@@ -4492,8 +4492,8 @@ namespace karto
 
     /**
      * Gets the grid coordinate from an index
-     * @param index
-     * @return grid coordinate
+     * @param index           :一维数组(grid图片)的指针
+     * @return grid coordinate:(x,y) in pixel
      */
     Vector2<kt_int32s> IndexToGrid(kt_int32s index) const
     {
@@ -4657,7 +4657,7 @@ namespace karto
      * @param y0
      * @param x1
      * @param y1
-     * @param f
+     * @param f :函数指针
      */
     void TraceLine(kt_int32s x0, kt_int32s y0, kt_int32s x1, kt_int32s y1, Functor* f = NULL)
     {
@@ -4716,7 +4716,7 @@ namespace karto
         {
           kt_int32s index = GridIndex(gridIndex, false);
           T* pGridPointer = GetDataPointer();
-          pGridPointer[index]++;
+          pGridPointer[index]++;//对应图像值+1
 
           if (f != NULL)
           {
@@ -5265,11 +5265,12 @@ namespace karto
 
     /**
      * Computes the position of the sensor
+     * map_T_laser = map_T_robot * robot_T_laser
      * @return scan pose
      */
     inline Pose2 GetSensorPose() const
     {
-      return GetSensorAt(m_CorrectedPose);   //基于修正的robot位置以及之前设定的laser scan相对于 robot的位置来求出laser scan在地图中的位置
+      return GetSensorAt(m_CorrectedPose);   
     }
 
     /**
